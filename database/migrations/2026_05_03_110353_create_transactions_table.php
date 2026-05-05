@@ -13,13 +13,14 @@ return new class extends Migration
     {
         Schema::create('transactions', function (Blueprint $table) {
         $table->id('id_transaksi');
-        $table->foreignId('id_user')->constrained('users', 'id_user');
+        $table->foreignId('id_user')->nullable()->constrained('users', 'id_user');
         $table->string('nama_pemesan');
         $table->string('no_meja')->nullable();
         $table->enum('opsi_pemesanan',['dine in','take away']);
-        $table->string('payment_method');
-        $table->string('payment_status');
-        $table->enum('status_pesanan',['pending','proses','seleai'])->default('pending');
+        $table->enum('payment_method',['tunai','qris']);
+        $table->enum('payment_status',['pending','paid']);
+        $table->enum('status_pesanan',['pending','proses','selesai'])->default('pending');
+        $table->text('qr_code_url')->nullable();
         $table->decimal('harga_total', 12, 2);
         $table->timestamps();
         });
