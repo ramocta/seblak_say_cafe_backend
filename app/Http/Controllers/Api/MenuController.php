@@ -12,9 +12,16 @@ use Illuminate\Support\Facades\Validator;
 class MenuController extends Controller
 {
     // 1. Ambil Semua Menu
-    public function index()
+    public function index(Request $request)
     {
-        $menus = Menu::with('kategori')->get();
+        $query = Menu::with('kategori');
+
+        if ($request->kategori){
+            $query->where('id_kategori_menu',$request->kategori);
+        }
+
+        $menus = $query->get();
+
         return response()->json([
             'success' => true,
             'data' => MenuResource::collection($menus)

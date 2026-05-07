@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\AdminDashboardController;
 
     // Auth Admin
     Route::post('/admin/login', [AuthController::class, 'login']);
+    Route::post('/admin/register', [AuthController::class, 'register']);
 
     // Katalog pelanggan
     Route::get('/menu', [MenuController::class, 'index']);

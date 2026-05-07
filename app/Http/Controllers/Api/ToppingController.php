@@ -12,9 +12,16 @@ use Illuminate\Support\Facades\Validator;
 class ToppingController extends Controller
 {
     // 1. Ambil Semua Topping
-    public function index()
+    public function index(Request $request)
     {
-        $toppings = Topping::with('kategori')->get();
+        $query = Topping::with('kategori');
+
+        if ($request->kategori){
+            $query->where('id_kategori_topping',$request->kategori);
+        }
+        
+        $toppings = $query->get();
+
         return response()->json([
             'success' => true,
             'data' => ToppingResource::collection($toppings)
