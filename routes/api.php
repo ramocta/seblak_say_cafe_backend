@@ -6,6 +6,9 @@ use App\Http\Controllers\Api\MenuController;
 use App\Http\Controllers\Api\ToppingController;
 use App\Http\Controllers\Api\TransactionController;
 use App\Http\Controllers\Api\AdminDashboardController;
+use App\Http\Controllers\Api\KategoriMenuController;
+use App\Http\Controllers\Api\KategoriToppingController;
+
 
     // Auth Admin
     Route::post('/admin/login', [AuthController::class, 'login']);
@@ -14,6 +17,9 @@ use App\Http\Controllers\Api\AdminDashboardController;
     // Katalog pelanggan
     Route::get('/menu', [MenuController::class, 'index']);
     Route::get('/topping', [ToppingController::class, 'index']);
+    Route::get('/kategorimenu', [KategoriMenuController::class, 'index']);
+    Route::get('/kategoritopping', [KategoriToppingController::class, 'index']);
+
 
     // Transaksi Pelanggan
     Route::prefix('checkout')->group(function () {
@@ -34,7 +40,7 @@ use App\Http\Controllers\Api\AdminDashboardController;
         Route::get('/history', [AdminDashboardController::class, 'history']);
         Route::get('/print/{id}', [AdminDashboardController::class, 'printReceipt']);
 
-        // Kelola Transaksi (Apply/Konfirmasi Selesai)
+        // Kelola Transaksi 
         Route::patch('/transactions/{id}/apply', [TransactionController::class, 'apply']);
     });
 });

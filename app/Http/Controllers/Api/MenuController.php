@@ -76,8 +76,7 @@ class MenuController extends Controller
     public function update(Request $request, Menu $menu)
     {
         $validator = Validator::make($request->all(), [
-            // Pastikan nama kolom sesuai dengan database Anda (id_kategori_mn)
-            'id_kategori_mn' => 'sometimes|exists:kategori_menus,id_kategori_menu',
+            'id_kategori_menu' => 'sometimes|exists:kategori_menus,id_kategori_menu',
             'nama_menu'      => 'sometimes|string|max:255',
             'harga'          => 'sometimes|numeric',
             'stok'           => 'sometimes|integer',

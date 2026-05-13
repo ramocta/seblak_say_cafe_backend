@@ -12,7 +12,7 @@ class ToppingResource extends JsonResource
     return [
         'id' => $this->id_topping,
         'nama' => $this->nama_topping,
-        'harga' => (float) $this->harga, // Paksa ke float agar Flutter tidak error
+        'harga' => (float) $this->harga, 
         'stok' => $this->stok,
         'gambar_url' => $this->gambar ? asset('storage/' . $this->gambar) : null,
         'kategori' => [

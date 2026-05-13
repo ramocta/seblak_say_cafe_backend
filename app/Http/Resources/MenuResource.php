@@ -19,7 +19,7 @@ class MenuResource extends JsonResource
             'id' => $this->id_kategori_menu,
             'nama' => $this->kategori->nama ?? 'Tanpa Kategori',
         ],
-        'last_update' => $this->updated_at->format('Y-m-d H:i:s'),
+        'last_update' => $this->updated_at ? $this->updated_at->format('Y-m-d H:i:s') : '-',
     ];
     }
 }
