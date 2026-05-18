@@ -18,9 +18,8 @@ class Transaction extends Model
         'no_meja',
         'opsi_pemesanan', 
         'payment_method',
-        'payment_status',
         'status_pesanan',
-        'qr_code_url', // Simpan URL QRIS
+        'proof_payment', // Simpan URL Bukti Pembayaran
         'harga_total'
     ];
 
@@ -38,5 +37,10 @@ class Transaction extends Model
     public function user()
     {
         return $this->belongsTo(User::class, 'id_user', 'id_user');
+    }
+
+    public function kasir()
+    {
+        return $this->belongsTo(User::class, 'processed_by');
     }
 }

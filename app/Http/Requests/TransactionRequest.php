@@ -16,6 +16,7 @@ class TransactionRequest extends FormRequest
         'no_meja' => 'nullable|string',
         'opsi_pemesanan' => 'required|in:dine in,take away',
         'payment_method' => 'required|string',
+        'proof_payment' => 'nullable|file|mimes:jpg,jpeg,png|max:2048', // Validasi file gambar
         'harga_total'    => 'nullable|numeric',
         'items' => 'required|array',
         'items.*.id_menu' => 'required|exists:menus,id_menu',

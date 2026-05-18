@@ -12,17 +12,21 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('transactions', function (Blueprint $table) {
-        $table->id('id_transaksi');
-        $table->foreignId('id_user')->nullable()->constrained('users', 'id_user');
-        $table->string('nama_pemesan');
-        $table->string('no_meja')->nullable();
-        $table->enum('opsi_pemesanan',['dine in','take away']);
-        $table->enum('payment_method',['tunai','qris']);
-        $table->enum('payment_status',['pending','paid']);
-        $table->enum('status_pesanan',['pending','proses','selesai'])->default('pending');
-        $table->text('qr_code_url')->nullable();
-        $table->decimal('harga_total', 12, 2);
-        $table->timestamps();
+            $table->id('id_transaksi');
+            $table->foreignId('id_user')->nullable()->constrained('users', 'id_user');
+            $table->string('nama_pemesan');
+            $table->string('no_meja')->nullable();
+            $table->enum('opsi_pemesanan', ['dine in', 'take away']);
+            $table->enum('payment_method', ['tunai', 'qris']);
+            
+            // 1. Perubahan Enum Status Pesanan (Pending, Selesai, Reject)
+            $table->enum('status_pesanan', ['pending', 'done', 'reject'])->default('pending');
+            
+            // 2. Mengubah qr_code_url menjadi proof_payment (nullable karena jika tunai tidak wajib upload)
+            $table->string('proof_payment', 255)->nullable();
+            
+            $table->decimal('harga_total', 12, 2);
+            $table->timestamps();
         });
     }
 

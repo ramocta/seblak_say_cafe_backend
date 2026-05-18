@@ -9,38 +9,59 @@ use App\Http\Controllers\Api\AdminDashboardController;
 use App\Http\Controllers\Api\KategoriMenuController;
 use App\Http\Controllers\Api\KategoriToppingController;
 
+/*
+|--------------------------------------------------------------------------
+| API Routes - Seblak Say Cafe
+|--------------------------------------------------------------------------
+*/
 
-    // Auth Admin
-    Route::post('/admin/login', [AuthController::class, 'login']);
-    Route::post('/admin/register', [AuthController::class, 'register']);
+// ==================== PUBLIC ROUTES (PELANGGAN) ====================
 
-    // Katalog pelanggan
-    Route::get('/menu', [MenuController::class, 'index']);
-    Route::get('/topping', [ToppingController::class, 'index']);
-    Route::get('/kategorimenu', [KategoriMenuController::class, 'index']);
-    Route::get('/kategoritopping', [KategoriToppingController::class, 'index']);
+// Katalog Pelanggan (Data Menu & Topping)
+Route::get('/menu', [MenuController::class, 'index']);
+Route::get('/topping', [ToppingController::class, 'index']);
+Route::get('/kategorimenu', [KategoriMenuController::class, 'index']);
+Route::get('/kategoritopping', [KategoriToppingController::class, 'index']);
+
+// Transaksi Pelanggan (Checkout)
+Route::post('/checkout', [TransactionController::class, 'store']);
 
 
-    // Transaksi Pelanggan
-    Route::prefix('checkout')->group(function () {
-        Route::post('/', [TransactionController::class, 'store']); 
-        Route::patch('/{id}/pay', [TransactionController::class, 'payQris']);
-    });
+// ==================== PROTECTED ROUTES (ADMIN / SANCTUM) ====================
 
-    Route::middleware('auth:sanctum')->group(function () {
-        Route::post('/logout', [AuthController::class, 'logout']);
+// Auth Admin (Akses Awal)
+Route::post('/admin/login', [AuthController::class, 'login']);
+Route::post('/admin/register', [AuthController::class, 'register']);
 
+Route::middleware('auth:sanctum')->group(function () {
+    
+    // Auth Revoke
+    Route::post('/logout', [AuthController::class, 'logout']);
+
+    // Grouping Fitur Khusus Internal Admin
     Route::prefix('admin')->group(function () {
+        
         // Kelola Menu & Topping (CRUD Admin)
         Route::apiResource('menu', MenuController::class)->except(['index', 'show']);
         Route::apiResource('topping', ToppingController::class)->except(['index']);
 
-        // Rute Khusus Dashboard & Laporan
+        // Rute Dashboard, Statistik, & Laporan Cetak Struk
         Route::get('/stats', [AdminDashboardController::class, 'stats']);
         Route::get('/history', [AdminDashboardController::class, 'history']);
         Route::get('/print/{id}', [AdminDashboardController::class, 'printReceipt']);
 
-        // Kelola Transaksi 
-        Route::patch('/transactions/{id}/apply', [TransactionController::class, 'apply']);
-    });
-});
+        // Kelola Validasi Transaksi Masuk (Sesuai Controller Baru)
+        Route::prefix('transactions')->group(function () {
+            // 1. Ambil detail pesanan & URL Bukti Transfer QRIS
+            Route::get('/{id}', [TransactionController::class, 'show']);
+            
+            // 2. Setujui pesanan masuk (Ubah status ke 'selesai')
+            Route::post('/{id}/apply', [TransactionController::class, 'apply']);
+            
+            // 3. Tolak pesanan masuk (Ubah status ke 'reject' & restock otomatis)
+            Route::post('/{id}/reject', [TransactionController::class, 'reject']);
+        });
+        
+    }); // Akhir dari prefix admin
+    
+}); // Akhir dari middleware sanctum    

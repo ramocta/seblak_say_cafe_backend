@@ -12,26 +12,42 @@ use Illuminate\Support\Facades\Auth;
 
 class TransactionService
 {
+    /**
+     * Membuat Transaksi Baru (Checkout)
+     */
     public function createTransaction(array $data)
     {
         return DB::transaction(function () use ($data) {
             $method = $data['payment_method'];
             $totalHargaKalkulasi = 0;
+            $proofPaymentPath = null;
 
-            // 1. Simpan Header Transaksi
+            // --- PROSES UPLOAD BUKTI PEMBAYARAN QRIS ---
+            if ($method === 'qris' && isset($data['proof_payment'])) {
+                $file = $data['proof_payment']; // Instance dari Illuminate\Http\UploadedFile
+
+                // Buat nama file unik untuk menghindari penumpukan berkas bernama sama
+                $filename = 'bukti-qris-' . time() . '-' . uniqid() . '.' . $file->getClientOriginalExtension();
+
+                // Simpan fisik file ke folder: storage/app/public/proof_payments/
+                $file->storeAs('public/proof_payments', $filename);
+
+                // Simpan path relatif ke database
+                $proofPaymentPath = 'proof_payments/' . $filename;
+            }
+
+            // 1. Simpan Header Transaksi (Sesuai Struktur Migrasi Baru)
             $transaction = Transaction::create([
                 'id_user'        => Auth::id(),
                 'nama_pemesan'   => $data['nama_pemesan'],
-                'no_meja'        => $data['no_meja'],
+                'no_meja'        => $data['no_meja'] ?? null,
                 'opsi_pemesanan' => $data['opsi_pemesanan'],
                 'payment_method' => $method,
-                'payment_status' => 'pending',
-                // Jika tunai langsung masuk 'proses' (dapur), jika QRIS 'menunggu' pembayaran
-                'status_pesanan' => ($method === 'tunai') ? 'proses' : 'pending',
-                'qr_code_url'    => ($method === 'qris') 
-                                    ? "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=SEBLAK-PAY-" . time() 
-                                    : null,
-                'harga_total'    => 0,
+
+                // Baik tunai maupun QRIS masuk dengan status awal 'pending'
+                'status_pesanan' => 'pending',
+                'proof_payment'  => $proofPaymentPath,
+                'harga_total'    => 0, // Diupdate setelah perulangan item selesai
             ]);
 
             foreach ($data['items'] as $item) {
@@ -42,7 +58,7 @@ class TransactionService
                 if ($menu->stok < $item['qty']) {
                     throw new \Exception("Stok menu {$menu->nama_menu} tidak mencukupi (Tersisa: {$menu->stok}).");
                 }
-                
+
                 // --- VALIDASI KATEGORI (WAJIB TOPPING) ---
                 // Asumsi: ID Kategori 1 adalah Seblak
                 if ($menu->id_kategori_menu == 1) {
@@ -75,21 +91,20 @@ class TransactionService
 
                         $subtotalTopping = $topping->harga * $top['qty'];
                         $totalHargaKalkulasi += $subtotalTopping;
-                        
+
                         PesananTopping::create([
-                            // Pastikan 'id_pesanan_menu' adalah FK yang benar di tabel pesanan_toppings
-                            'id_pesanan_menu' => $pesananMenu->id_pesanan_menu, 
+                            'id_pesanan_menu' => $pesananMenu->id_pesanan_menu,
                             'id_topping'      => $topping->id_topping,
                             'qty'             => $top['qty'],
                             'harga_satuan'    => $topping->harga,
                             'subtotal'        => $subtotalTopping,
                         ]);
-                        
+
                         // Kurangi stok topping
                         $topping->decrement('stok', $top['qty']);
                     }
                 }
-                
+
                 // Kurangi stok menu utama
                 $menu->decrement('stok', $item['qty']);
             }
@@ -102,70 +117,123 @@ class TransactionService
             return $transaction;
         });
     }
-    /**
-     * Fungsi Apply/Konfirmasi Admin
+
+/**
+     * Konfirmasi / Terima Pesanan oleh Admin (Kasir)
      */
     public function applyOrder($id)
     {
         return DB::transaction(function () use ($id) {
             $transaction = Transaction::findOrFail($id);
 
-            if ($transaction->payment_method === 'tunai') {
-                // Alur Tunai: Klik apply langsung bayar & selesai
-                $transaction->update([
-                    'payment_status' => 'paid',
-                    'status_pesanan' => 'selesai'
-                ]);
-            } else {
-                // Alur QRIS: Cek apakah sudah dibayar (paid) sebelum diselesaikan
-                if ($transaction->payment_status !== 'paid') {
-                    throw new \Exception("Gagal: Pesanan QRIS belum dibayar oleh pelanggan.");
-                }
-
-                $transaction->update([
-                    'status_pesanan' => 'selesai'
-                ]);
+            if ($transaction->status_pesanan !== 'pending') {
+                throw new \Exception("Gagal: Hanya pesanan berstatus 'pending' yang dapat disetujui.");
             }
+
+            // Ketika admin klik setuju, status menjadi selesai
+            // Dan kita catat ID user (admin) yang memprosesnya di kolom 'processed_by'
+            $transaction->update([
+                'status_pesanan' => 'done',
+                'id_user'   => Auth::id() // ✅ Menyimpan ID User (Admin) yang mengeksekusi
+            ]);
 
             return $transaction;
         });
     }
 
     /**
-     * Simulasi Pembayaran QRIS (Dipanggil Webhook/User)
+     * Menolak Pesanan oleh Admin & Mengembalikan Seluruh Stok (Restock)
      */
-    public function markAsPaid($id)
+    public function rejectOrder($id)
     {
-        $transaction = Transaction::findOrFail($id);
-        
-        return $transaction->update([
-            'payment_status' => 'paid',
-            'status_pesanan' => 'proses' // Pindahkan dari 'menunggu' ke 'proses' (dapur)
-        ]);
+        return DB::transaction(function () use ($id) {
+            $transaction = Transaction::with(['pesananMenus.pesananToppings'])->findOrFail($id);
+
+            if ($transaction->status_pesanan !== 'pending') {
+                throw new \Exception("Gagal: Hanya pesanan berstatus 'pending' yang dapat ditolak.");
+            }
+
+            // --- PROSES PEMBALIKAN STOK (RESTOCK) ---
+            foreach ($transaction->pesananMenus as $pesananMenu) {
+                $menu = Menu::find($pesananMenu->id_menu);
+                if ($menu) {
+                    $menu->increment('stok', $pesananMenu->qty);
+                }
+
+                foreach ($pesananMenu->pesananToppings as $pesananTopping) {
+                    $topping = Topping::find($pesananTopping->id_topping);
+                    if ($topping) {
+                        $topping->increment('stok', $pesananTopping->qty);
+                    }
+                }
+            }
+
+            // Update status menjadi reject dan catat ID user (admin) yang menolak
+            $transaction->update([
+                'status_pesanan' => 'reject',
+                'id_user'   => Auth::id() // ✅ Menyimpan ID User (Admin) yang mengeksekusi
+            ]);
+
+            return $transaction;
+        });
     }
 
-
-        public function getMonthlyRevenue()
+    /**
+     * Mengambil Detail Transaksi Lengkap & Menyusun Format Datanya untuk Admin
+     */
+    public function getTransactionDetailForAdmin($id)
     {
-        return Transaction::where('payment_status', 'paid')
-            ->where('status_pesanan', 'selesai')
+        // 1. Ambil data transaksi beserta relasi detail menu dan toppingnya
+        $transaction = Transaction::with([
+            'pesananMenus.menu', 
+            'pesananMenus.pesananToppings.topping'
+        ])->findOrFail($id);
+
+        // 2. Buat URL penuh bukti pembayaran jika ada (QRIS)
+        $proofPaymentUrl = $transaction->proof_payment 
+            ? url('storage/' . $transaction->proof_payment) 
+            : null;
+
+        // 3. Susun data utuh di sini agar Controller tinggal terima beres
+        return [
+            'id_transaksi'      => $transaction->id_transaksi,
+            'nama_pemesan'      => $transaction->nama_pemesan,
+            'no_meja'           => $transaction->no_meja,
+            'opsi_pemesanan'    => $transaction->opsi_pemesanan,
+            'payment_method'    => $transaction->payment_method,
+            'status_pesanan'    => $transaction->status_pesanan,
+            'harga_total'       => $transaction->harga_total,
+            'proof_payment_url' => $proofPaymentUrl, // Link gambar siap cek di Flutter
+            'created_at'        => $transaction->created_at,
+            'items'             => $transaction->pesananMenus // Array isi seblak + topping
+        ];
+    }
+
+    /**
+     * Mengambil Pendapatan Bulanan (Hanya dari pesanan yang sukses/selesai)
+     */
+    public function getMonthlyRevenue()
+    {
+        return Transaction::where('status_pesanan', 'done')
             ->whereMonth('created_at', now()->month)
             ->whereYear('created_at', now()->year)
             ->sum('harga_total');
     }
 
+    /**
+     * Mengambil Riwayat Transaksi
+     */
     public function getTransactionHistory($status = null)
-{
-    $query = Transaction::with(['pesananMenus.menu', 'pesananMenus.pesananToppings.topping'])
-        ->orderBy('created_at', 'desc');
+    {
+        $query = Transaction::with(['pesananMenus.menu', 'pesananMenus.pesananToppings.topping'])
+            ->orderBy('created_at', 'desc');
 
-    // Jika ada filter status (misal: 'selesai', 'proses'), terapkan ke query
-    if ($status) {
-        $query->where('status_pesanan', $status);
+        if ($status) {
+            $query->where('status_pesanan', $status);
+        }
+
+        return $query->get();
     }
-
-    return $query->get();
-}
 
     /**
      * Mengambil data lengkap untuk struk
@@ -176,4 +244,3 @@ class TransactionService
             ->findOrFail($id);
     }
 }
-

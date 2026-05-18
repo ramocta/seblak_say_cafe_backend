@@ -19,11 +19,18 @@ class TransactionController extends Controller
 
     /**
      * Membuat transaksi baru (User Checkout)
+     * Menerima kiriman JSON (Tunai) atau Multipart FormData (QRIS + File Gambar)
      */
     public function store(TransactionRequest $request): JsonResponse
     {
         try {
-            $transaction = $this->transactionService->createTransaction($request->validated());
+            // Gabungkan data input teks yang lolos validasi dengan file fisik bukti bayar (jika ada)
+            $dto = $request->validated();
+            if ($request->hasFile('proof_payment')) {
+                $dto['proof_payment'] = $request->file('proof_payment');
+            }
+
+            $transaction = $this->transactionService->createTransaction($dto);
             
             return response()->json([
                 'success' => true,
@@ -38,46 +45,68 @@ class TransactionController extends Controller
         }
     }
 
+   /**
+     * Mengambil Detail Transaksi Lengkap (Hanya Menampilkan Response)
+     */
+    public function show($id): JsonResponse
+    {
+        try {
+            // Controller cukup memanggil service, lalu melemparkan hasilnya ke response
+            $formattedData = $this->transactionService->getTransactionDetailForAdmin($id);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Detail transaksi berhasil dimuat.',
+                'data'    => $formattedData
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal memuat detail transaksi: ' . $e->getMessage()
+            ], 404);
+        }
+    }
+    
     /**
      * Admin melakukan konfirmasi/penyelesaian pesanan (Apply)
      */
     public function apply($id): JsonResponse
     {
         try {
-            // Memanggil logika applyOrder yang baru di Service
             $transaction = $this->transactionService->applyOrder($id);
             
             return response()->json([
                 'success' => true,
-                'message' => 'Pesanan berhasil diproses/diselesaikan!',
+                'message' => 'Pesanan berhasil disetujui dan diselesaikan!',
                 'data' => new TransactionResource($transaction)
             ], 200);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Gagal memproses pesanan: ' . $e->getMessage()
-            ], 400); // 400 karena biasanya kesalahan logika (misal: QRIS belum bayar)
+            ], 400); 
         }
     }
 
     /**
-     * Simulasi atau Webhook Pembayaran QRIS (Mark as Paid)
+     * ✅ BARU: Admin menolak pesanan masuk (Reject)
+     * Otomatis memicu pembalikan/pengembalian (restock) stok menu & topping
      */
-    public function payQris($id): JsonResponse
+    public function reject($id): JsonResponse
     {
         try {
-            $this->transactionService->markAsPaid($id);
-            
+            $transaction = $this->transactionService->rejectOrder($id);
+
             return response()->json([
                 'success' => true,
-                'message' => 'Pembayaran QRIS berhasil dikonfirmasi!',
+                'message' => 'Pesanan berhasil ditolak dan stok telah dikembalikan.',
+                'data' => new TransactionResource($transaction)
             ], 200);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Gagal mengonfirmasi pembayaran: ' . $e->getMessage()
-            ], 500);
+                'message' => 'Gagal menolak pesanan: ' . $e->getMessage()
+            ], 400);
         }
     }
-
 }
