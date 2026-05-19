@@ -24,28 +24,35 @@ class TransactionController extends Controller
     public function store(TransactionRequest $request): JsonResponse
     {
         try {
-            // Gabungkan data input teks yang lolos validasi dengan file fisik bukti bayar (jika ada)
             $dto = $request->validated();
+
+            // ✅ Pass file object jika ada
             if ($request->hasFile('proof_payment')) {
                 $dto['proof_payment'] = $request->file('proof_payment');
             }
 
             $transaction = $this->transactionService->createTransaction($dto);
-            
+
             return response()->json([
                 'success' => true,
                 'message' => 'Pesanan berhasil dibuat!',
-                'data' => new TransactionResource($transaction)
+                'data'    => new TransactionResource($transaction),
             ], 201);
+        } catch (\InvalidArgumentException $e) {
+            // ✅ Tangkap error validasi manual dari service sebagai 422
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 422);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Gagal memproses transaksi: ' . $e->getMessage()
+                'message' => 'Gagal memproses transaksi: ' . $e->getMessage(),
             ], 500);
         }
     }
 
-   /**
+    /**
      * Mengambil Detail Transaksi Lengkap (Hanya Menampilkan Response)
      */
     public function show($id): JsonResponse
@@ -66,7 +73,7 @@ class TransactionController extends Controller
             ], 404);
         }
     }
-    
+
     /**
      * Admin melakukan konfirmasi/penyelesaian pesanan (Apply)
      */
@@ -74,7 +81,7 @@ class TransactionController extends Controller
     {
         try {
             $transaction = $this->transactionService->applyOrder($id);
-            
+
             return response()->json([
                 'success' => true,
                 'message' => 'Pesanan berhasil disetujui dan diselesaikan!',
@@ -84,7 +91,7 @@ class TransactionController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Gagal memproses pesanan: ' . $e->getMessage()
-            ], 400); 
+            ], 400);
         }
     }
 

@@ -22,19 +22,38 @@ class TransactionService
             $totalHargaKalkulasi = 0;
             $proofPaymentPath = null;
 
+            // agar error dikembalikan sebagai JSON bukan HTML
+            if ($method === 'qris') {
+                if (
+                    !isset($data['proof_payment']) ||
+                    !($data['proof_payment'] instanceof \Illuminate\Http\UploadedFile) ||
+                    !$data['proof_payment']->isValid()
+                ) {
+                    throw new \InvalidArgumentException(
+                        'Bukti pembayaran QRIS wajib diupload dan harus berupa file gambar yang valid.'
+                    );
+                }
+            }
+
             // --- PROSES UPLOAD BUKTI PEMBAYARAN QRIS ---
             if ($method === 'qris' && isset($data['proof_payment'])) {
-                $file = $data['proof_payment']; // Instance dari Illuminate\Http\UploadedFile
+                $file = $data['proof_payment'];
 
-                // Buat nama file unik untuk menghindari penumpukan berkas bernama sama
-                $filename = 'bukti-qris-' . time() . '-' . uniqid() . '.' . $file->getClientOriginalExtension();
+                // ✅ Validasi tipe file — hanya izinkan gambar
+                $allowedMimes = ['jpg', 'jpeg', 'png', 'webp'];
+                $ext = strtolower($file->getClientOriginalExtension());
 
-                // Simpan fisik file ke folder: storage/app/public/proof_payments/
+                if (!in_array($ext, $allowedMimes)) {
+                    throw new \InvalidArgumentException(
+                        'Format bukti pembayaran tidak valid. Gunakan JPG, PNG, atau WEBP.'
+                    );
+                }
+
+                $filename = 'bukti-qris-' . time() . '-' . uniqid() . '.' . $ext;
                 $file->storeAs('public/proof_payments', $filename);
-
-                // Simpan path relatif ke database
                 $proofPaymentPath = 'proof_payments/' . $filename;
             }
+
 
             // 1. Simpan Header Transaksi (Sesuai Struktur Migrasi Baru)
             $transaction = Transaction::create([
@@ -118,7 +137,7 @@ class TransactionService
         });
     }
 
-/**
+    /**
      * Konfirmasi / Terima Pesanan oleh Admin (Kasir)
      */
     public function applyOrder($id)
@@ -185,13 +204,13 @@ class TransactionService
     {
         // 1. Ambil data transaksi beserta relasi detail menu dan toppingnya
         $transaction = Transaction::with([
-            'pesananMenus.menu', 
+            'pesananMenus.menu',
             'pesananMenus.pesananToppings.topping'
         ])->findOrFail($id);
 
         // 2. Buat URL penuh bukti pembayaran jika ada (QRIS)
-        $proofPaymentUrl = $transaction->proof_payment 
-            ? url('storage/' . $transaction->proof_payment) 
+        $proofPaymentUrl = $transaction->proof_payment
+            ? url('storage/' . $transaction->proof_payment)
             : null;
 
         // 3. Susun data utuh di sini agar Controller tinggal terima beres
