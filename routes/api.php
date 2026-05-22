@@ -26,6 +26,8 @@ Route::get('/kategoritopping', [KategoriToppingController::class, 'index']);
 // Transaksi Pelanggan (Checkout)
 Route::post('/checkout', [TransactionController::class, 'store']);
 
+Route::get('/transactions/{id}', [TransactionController::class, 'show']);
+
 
 // ==================== PROTECTED ROUTES (ADMIN / SANCTUM) ====================
 

@@ -50,7 +50,7 @@ class TransactionService
                 }
 
                 $filename = 'bukti-qris-' . time() . '-' . uniqid() . '.' . $ext;
-                $file->storeAs('public/proof_payments', $filename);
+                $file->storeAs('proof_payments', $filename, 'public');
                 $proofPaymentPath = 'proof_payments/' . $filename;
             }
 
