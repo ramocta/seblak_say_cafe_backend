@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Models\PesananTopping;
 
 class Topping extends Model
 {
@@ -20,5 +21,10 @@ class Topping extends Model
     public function kategori()
     {
         return $this->belongsTo(KategoriTopping::class, 'id_kategori_topping');
+    }
+
+    public function pesananToppings()
+    {
+        return $this->hasMany(PesananTopping::class, 'id_topping', 'id_topping');
     }
 }

@@ -137,6 +137,44 @@ class TransactionService
         });
     }
 
+
+    /**
+     * Membatalkan/Discard Pesanan oleh Pelanggan & Mengembalikan Seluruh Stok (Restock)
+     */
+    public function cancelOrder($id)
+    {
+        return DB::transaction(function () use ($id) {
+            // Ambil data transaksi beserta detail menu dan toppingnya
+            $transaction = Transaction::with(['pesananMenus.pesananToppings'])->findOrFail($id);
+
+            // Validasi: Hanya pesanan yang masih 'pending' yang boleh di-discard
+            if ($transaction->status_pesanan !== 'pending') {
+                throw new \Exception("Gagal: Pesanan tidak dapat dibatalkan karena sedang diproses atau sudah selesai.");
+            }
+
+            // --- PROSES PEMBALIKAN STOK (RESTOCK) ---
+            foreach ($transaction->pesananMenus as $pesananMenu) {
+                $menu = Menu::find($pesananMenu->id_menu);
+                if ($menu) {
+                    $menu->increment('stok', $pesananMenu->qty);
+                }
+
+                foreach ($pesananMenu->pesananToppings as $pesananTopping) {
+                    $topping = Topping::find($pesananTopping->id_topping);
+                    if ($topping) {
+                        $topping->increment('stok', $pesananTopping->qty);
+                    }
+                }
+            }
+
+            $transaction->update([
+                'status_pesanan' => 'reject',
+            ]);
+
+            return $transaction;
+        });
+    }
+
     /**
      * Konfirmasi / Terima Pesanan oleh Admin (Kasir)
      */

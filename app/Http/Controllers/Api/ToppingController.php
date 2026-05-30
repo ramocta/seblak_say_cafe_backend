@@ -1,11 +1,11 @@
-<?php
-
+<?php   
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Topping;
 use App\Http\Resources\ToppingResource; // Pastikan resource ini sudah dibuat
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 
@@ -16,10 +16,10 @@ class ToppingController extends Controller
     {
         $query = Topping::with('kategori');
 
-        if ($request->kategori){
-            $query->where('id_kategori_topping',$request->kategori);
+        if ($request->kategori) {
+            $query->where('id_kategori_topping', $request->kategori);
         }
-        
+
         $toppings = $query->get();
 
         return response()->json([
@@ -114,11 +114,14 @@ class ToppingController extends Controller
     // 5. Hapus Topping
     public function destroy(Topping $topping)
     {
-        if ($topping->gambar) {
-            Storage::disk('public')->delete($topping->gambar);
-        }
+        DB::transaction(function () use ($topping) {
+            if ($topping->gambar) {
+                Storage::disk('public')->delete($topping->gambar);
+            }
 
-        $topping->delete();
+            $topping->pesananToppings()->delete();
+            $topping->delete();
+        });
 
         return response()->json([
             'success' => true,

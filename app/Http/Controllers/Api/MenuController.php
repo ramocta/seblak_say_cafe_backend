@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Menu;
 use App\Http\Resources\MenuResource;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 
@@ -16,8 +17,8 @@ class MenuController extends Controller
     {
         $query = Menu::with('kategori');
 
-        if ($request->kategori){
-            $query->where('id_kategori_menu',$request->kategori);
+        if ($request->kategori) {
+            $query->where('id_kategori_menu', $request->kategori);
         }
 
         $menus = $query->get();
@@ -98,7 +99,7 @@ class MenuController extends Controller
             if ($menu->gambar) {
                 Storage::disk('public')->delete($menu->gambar);
             }
-            
+
             // 2. Simpan gambar baru
             $data['gambar'] = $request->file('gambar')->store('menu', 'public');
         }
@@ -113,16 +114,23 @@ class MenuController extends Controller
         ], 200); // Gunakan status 200 OK untuk update
     }
 
-    
+
 
     // 5. Hapus Menu
     public function destroy(Menu $menu)
     {
-        if ($menu->gambar) {
-            Storage::disk('public')->delete($menu->gambar);
-        }
+        DB::transaction(function () use ($menu) {
+            if ($menu->gambar) {
+                Storage::disk('public')->delete($menu->gambar);
+            }
 
-        $menu->delete();
+            foreach ($menu->pesananMenus as $pesananMenu) {
+                $pesananMenu->pesananToppings()->delete();
+            }
+
+            $menu->pesananMenus()->delete();
+            $menu->delete();
+        });
 
         return response()->json([
             'success' => true,

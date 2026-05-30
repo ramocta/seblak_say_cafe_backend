@@ -74,6 +74,22 @@ class TransactionController extends Controller
         }
     }
 
+    public function cancel($id, TransactionService $transactionService)
+    {
+        try {
+            $transactionService->cancelOrder($id);
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Pesanan berhasil dibatalkan dan stok telah dikembalikan.'
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => $e->getMessage()
+            ], 400);
+        }
+    }
+
     /**
      * Admin melakukan konfirmasi/penyelesaian pesanan (Apply)
      */

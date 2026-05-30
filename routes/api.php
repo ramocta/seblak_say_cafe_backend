@@ -28,6 +28,9 @@ Route::post('/checkout', [TransactionController::class, 'store']);
 
 Route::get('/transactions/{id}', [TransactionController::class, 'show']);
 
+// Batalkan Pesanan (Hanya Jika Belum Diproses Admin)
+Route::post('/transactions/{id}/cancel', [TransactionController::class, 'cancel']);
+
 
 // ==================== PROTECTED ROUTES (ADMIN / SANCTUM) ====================
 
